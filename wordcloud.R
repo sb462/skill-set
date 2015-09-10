@@ -1,3 +1,9 @@
+Wordcloud for controversial comments
+------------------------------------
+  We check out the wordcloud of the posts that are controversial in Reddit.
+First we make a conection to database, fetch the May 2015 data and filter in the 
+controversial comments
+```{r}
 library(dplyr)
 library(wordcloud)
 library(tm)
@@ -12,7 +18,12 @@ db_controversial <- db %>%
   collect() %>%
   data.frame() 
 
-# lets do custom cleaning of the text since tm takes so long and often not correct
+```
+We need to clean the data, since TM package takes long and would be an overkill in
+this case lets just use grep and gsub
+
+```{r}
+
 stop_words <- stopwords("SMART")
 sublist <- paste0("\\b(", paste0(stop_words, collapse="|"), ")\\b")
 
@@ -28,34 +39,23 @@ clean_func <- function(text){
   #ctext <- gsub("['[:alpha:]+]", " ", ctext, fixed=FALSE, perl=TRUE)
   # removing leftover ' if any
   ctext <- gsub("\\s\'\\w*\\s", " ", ctext, fixed=FALSE, perl=TRUE) 
-  
   # remove extra whitespaces
   ctext <- gsub("[[:blank:]]+", " ",ctext, fixed=FALSE, perl=TRUE)
   return(ctext)
 }
 
+# cleaning the data frame
 db_text <- db_controversial %>%
   mutate(clean_text = clean_func(body)) %>%
   select(clean_text)
 
+```
+Once we have done cleaning we tokenize the text and create a term document matrix
+
+```{r}
 corp <- Corpus(VectorSource(db_text$clean_text))    
 dtm <- DocumentTermMatrix(corp,
                           control = list(weighting = function(x) weightTfIdf(x, normalize = FALSE)))
 dtm_sparse <- removeSparseTerms(dtm, 0.99)
 post_words <- as.data.frame(as.matrix(dtm_sparse))
-print("matrix done")
-
-total_words <- data.frame(words = colnames(post_words),
-                          counts = colSums(post_words))
-
-
-#Set up output so it is in a named png
-
-png("news.png")
-
-wordcloud(words = total_words$words,
-          freq=total_words$counts, 
-          max.words = 100,
-          color = brewer.pal(8,"Dark2"))
-
-dev.off()    
+```
